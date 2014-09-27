@@ -1,0 +1,16 @@
+Quartus II Archive log --	D:/projects/Timer/output_files/Timer.qarlog
+
+Archive:	D:/projects/Timer/output_files/Timer.qar
+Date:		Fri Sep 26 21:57:34 2014
+Quartus II 32-bit		13.0.1 Build 232 06/12/2013 SP 1 SJ Web Edition
+
+	=========== Files Selected: ===========
+D:/projects/Timer/Timer.qpf
+D:/projects/Timer/Timer.qsf
+D:/projects/Timer/Timer.v
+D:/projects/Timer/incremental_db/compiled_partitions/Timer.db_info
+c:/altera/13.0sp1/quartus/bin/assignment_defaults.qdf
+	======= Total: 5 files to archive =======
+
+	================ Status: ===============
+All files archived successfully.
