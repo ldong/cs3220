@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import os.path
+import sys
 
-constants = {
+header = {
         'width': 32,
         'depth': 2048,
         'address_radix': 'HEX',
@@ -56,39 +57,63 @@ opcode_hash = {
         "bne":"100101"
         }
 
+
+
 def main():
     fname = raw_input('Enter the file name: ')
+    if check_file(fname):
+        file_suffix = '.mif'
+        output_file_name = ''.join([fname[:-4], file_suffix])
+        read_file(fname)
+        write_file(output_file_name)
+
+
+def check_file(fname):
     if os.path.isfile(fname):
         if fname[-4:] == '.a32':
-            read_file(fname)
+            return True
         else:
             print 'Please make sure it is a .a32 file'
     else:
         print 'File: {} does not exist'.format(fname)
-
-    # for k, v in registers.iteritems():
-        # print k, v
+    return False
 
 
 def read_file(fname):
     print 'Reading file: {}'.format(fname)
+    with open (fname, 'r') as f:
+        print f.read()
+
 
 def parse_file(fname):
     pass
 
+
 def write_file(output_file_name):
-    pass
+    with open (output_file_name, 'w') as f:
+        write_header(f)
+        write_contents(f)
+        write_footer(f)
 
-def write_header(output_file):
-    # output_file.puts "WIDTH=#{DATA_BITS};"
-    # output_file.puts "DEPTH=#{ADDRESSES};"
-    # output_file.puts "ADDRESS_RADIX=HEX;"
-    # output_file.puts "DATA_RADIX=HEX;"
-    # output_file.puts "CONTENT BEGIN"
-    pass
+def write_contents(file):
+    file.write('\n')
+    file.write('Empty')
+    file.write('\n')
 
-def write_footer(output_file):
-    pass
+def write_header(file):
+    file.write('WIDTH={};'.format(header.get('width')))
+    file.write('\n')
+    file.write('DEPTH={};'.format(header.get('depth')))
+    file.write('\n')
+    file.write('ADDRESS_RADIX={};'.format(header.get('address_radix')))
+    file.write('\n')
+    file.write('DATA_RADIX={};'.format(header.get('data_radix')))
+    file.write('\n')
+    file.write('CONTENT BEGIN')
+    file.write('\n')
+
+def write_footer(file):
+    file.write('END;')
 
 if __name__ == '__main__':
     main()
