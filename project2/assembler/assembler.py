@@ -164,6 +164,7 @@ def write_contents(file):
     file.write('Empty')
     file.write('\n')
 
+
 def write_header(file):
     file.write('WIDTH={};'.format(header.get('width')))
     file.write('\n')
@@ -176,8 +177,14 @@ def write_header(file):
     file.write('CONTENT BEGIN')
     file.write('\n')
 
+
 def write_footer(file):
     file.write('END;')
+
+def bin2hex(b_str):
+    ''' return binary string to hex format'''
+    return hex(int(b_str, 2))
+
 
 if __name__ == '__main__':
     main()
