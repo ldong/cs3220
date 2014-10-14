@@ -19,3 +19,7 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# ignore any vim temp files
+*.swp
+*.swo
