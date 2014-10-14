@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-import os.path
-import sys
+import os.path, sys, re
+
 
 header = {
         'width': 32,
@@ -121,16 +121,16 @@ opcodes = {
         'JMP': '',
         }
 
-
+instruction_line_number = 0
 
 def main():
-    fname = raw_input('Enter the file name: ')
+    # fname = raw_input('Enter the file name: ')
+    fname = 'Test.a32'
     if check_file(fname):
         file_suffix = '.mif'
         output_file_name = ''.join([fname[:-4], file_suffix])
         read_file(fname)
         write_file(output_file_name)
-
 
 def check_file(fname):
     if os.path.isfile(fname):
@@ -146,7 +146,28 @@ def check_file(fname):
 def read_file(fname):
     print 'Reading file: {}'.format(fname)
     with open (fname, 'r') as f:
-        print f.read()
+        file_line_number = 1
+        for line in f.xreadlines():
+            print file_line_number,
+            if re.match(r'^\s*$', line):
+                print 'Line is empty'
+                pass
+            if re.match(r'^\s*;', line):
+                print 'Line is a comment'
+                pass
+            if re.match(r'\s*.ORIG', line):
+                print 'Line has orig'
+                pass
+            if re.match(r'\s([a-zA-Z]+)', line):
+                print 'Line has instruction'
+                pass
+            if re.match(r'[a-zA-Z0-9]+:', line):
+                print 'Line has section label'
+                pass
+            if re.match(r'\s*.NAME', line):
+                print 'Line has NAME variables'
+                pass
+            file_line_number += 1
 
 
 def parse_file(fname):
@@ -156,34 +177,47 @@ def parse_file(fname):
 def write_file(output_file_name):
     with open (output_file_name, 'w') as f:
         write_header(f)
-        write_contents(f)
+        write_contents(f, instruction_line_number)
         write_footer(f)
 
-def write_contents(file):
+def write_contents(file, line_number):
     file.write('\n')
-    file.write('Empty')
-    file.write('\n')
+    for i in xrange(10):
+        write_line_number(file, instruction_line_number)
+        line_number = line_number + 1
+        file.write('\n')
 
 
 def write_header(file):
     file.write('WIDTH={};'.format(header.get('width')))
-    file.write('\n')
+    write_change_line(file)
+
     file.write('DEPTH={};'.format(header.get('depth')))
-    file.write('\n')
+    write_change_line(file)
+
     file.write('ADDRESS_RADIX={};'.format(header.get('address_radix')))
-    file.write('\n')
+    write_change_line(file)
+
     file.write('DATA_RADIX={};'.format(header.get('data_radix')))
-    file.write('\n')
+    write_change_line(file)
+
     file.write('CONTENT BEGIN')
-    file.write('\n')
+    write_change_line(file)
 
 
 def write_footer(file):
     file.write('END;')
 
-def bin2hex(b_str):
+def write_change_line(file):
+    file.write('\n')
+
+def bin2hex(b_str, prefix):
     ''' return binary string to hex format'''
     return hex(int(b_str, 2))
+
+def write_line_number(file, count):
+    file.write(hex(count)[2:].zfill(8))
+    file.write(' : ')
 
 
 if __name__ == '__main__':
