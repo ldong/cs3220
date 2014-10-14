@@ -122,10 +122,12 @@ opcodes = {
         }
 
 instruction_line_number = 0
+names = {}
+origs = []
 
 def main():
-    # fname = raw_input('Enter the file name: ')
     fname = 'Test.a32'
+    # fname = raw_input('Enter the file name: ')
     if check_file(fname):
         file_suffix = '.mif'
         output_file_name = ''.join([fname[:-4], file_suffix])
@@ -157,6 +159,8 @@ def read_file(fname):
                 pass
             if re.match(r'\s*.ORIG', line):
                 print 'Line has orig'
+                curr = line.split()
+                origs.append(curr[1])
                 pass
             if re.match(r'\s([a-zA-Z]+)', line):
                 print 'Line has instruction'
@@ -166,8 +170,14 @@ def read_file(fname):
                 pass
             if re.match(r'\s*.NAME', line):
                 print 'Line has NAME variables'
+                curr = ''.join([e for i, e in enumerate(line.split()) if i > 0 ])
+                curr = curr.split('=')
+                names[curr[0]] = curr[1]
                 pass
             file_line_number += 1
+    print names
+    print origs
+    import ipdb; ipdb.set_trace()
 
 
 def parse_file(fname):
@@ -183,7 +193,7 @@ def write_file(output_file_name):
 def write_contents(file, line_number):
     file.write('\n')
     for i in xrange(10):
-        write_line_number(file, instruction_line_number)
+        write_line_number(file, line_number)
         line_number = line_number + 1
         file.write('\n')
 
