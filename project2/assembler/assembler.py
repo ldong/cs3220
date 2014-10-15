@@ -68,8 +68,8 @@ opcodes = {
         'NXORI':    '10001110',
         'MVHI':     '10001011',
 
-        'SW':       '10010000',
-        'LW':       '01010000',
+        'LW':       '10010000',
+        'SW':       '01010000',
 
         'F':        '00100000',
         'EQ':       '00100001',
@@ -219,14 +219,15 @@ def read_file(fname, instructions):
                 # print 'Line is empty'
                 pass
             elif re.match(r'^\s*;', line):
-                print 'Line is a comment'
+                # print 'Line is a comment'
+                pass
             elif re.match(r'\s*.ORIG', line):
-                print 'Line has orig'
+                # print 'Line has orig'
                 curr = line.split()
                 origs.append(curr[1])
             elif re.match(r'\s([a-zA-Z]+)', line):
-                print 'Line has instruction'
-                # remove comments
+                # print 'Line has instruction'
+                # using regex to remove comments
                 line = re.sub(r'\w*;.*$', '', line)
                 curr = line.strip().split()
                 opcode = curr[0].upper()
@@ -248,13 +249,13 @@ def read_file(fname, instructions):
                     instructions.append(line)
                     total_instructions += 1
             elif re.match(r'[a-zA-Z0-9]+:\s*', line):
-                print 'Line has section label'
+                # print 'Line has section label'
                 instructions.append(line)
                 label = line.strip()[:-1]
                 # import ipdb; ipdb.set_trace()
                 labels.add(label)
             elif re.match(r'\s*.NAME', line):
-                print 'Line has NAME variables'
+                # print 'Line has NAME variables'
                 curr = ''.join([e for i, e in enumerate(line.split()) if i > 0])
                 curr = curr.split('=')
                 names[curr[0]] = curr[1]
@@ -263,29 +264,34 @@ def read_file(fname, instructions):
                 import ipdb; ipdb.set_trace()
             file_line_number += 1
             file_mem_numbber += 4
-    print 'names: \n {}'.format(names)
+    print '\nnames: \n {}'.format(names)
     print 'origs: \n {}'.format(origs)
     print 'labels: \n {}'.format(labels)
-    print 'total_instructions: \n {}'.format(total_instructions)
+    print 'total_instructions:  {}'.format(total_instructions)
     return total_instructions
 
 def parse_instruction(idx, instruction, instructions):
-    rd, rs1, rs2, imm12 = None, None, None, None
+    rd, rs1, rs2 = None, None, None
     imm16, immHi, pcrel, shImm = None, None, None, None
     curr = instruction.strip().split()
     opcode = curr[0].upper()
     if opcode in isa_has_3_operands:
         curr = ''.join([e for i, e in enumerate(curr) if i > 0])
         curr = curr.split(',')
-        if opcode in isa_type_12_zero:
-            imm12 = '000000000000'
+        if opcode == 'SUBI':
+            opcode = 'ADDI'
+            rd = curr[0]
+            rs1 = curr[1]
+            imm16 = get_imm16(curr[2])
+        elif opcode in isa_type_12_zero:
             rd = curr[0]
             rs1 = curr[1]
             rs2 = curr[2]
         elif opcode in isa_type_imm16:
             rd = curr[0]
             rs1 = curr[1]
-
+            # print opcode, curr
+            imm16 = get_imm16(curr[2])
         elif opcode in isa_type_pcrel:
             rs1 = curr[0]
             rs2 = curr[1]
@@ -302,8 +308,8 @@ def parse_instruction(idx, instruction, instructions):
         if opcode in isa_type_mvhi:
             curr = curr.split(',')
             rd = curr[0]
-            imm16 = get_imm16(curr[1])
-            immHi = '0' + imm16
+            imm16 = get_imm16(curr[1], hi=True)
+            immHi = imm16
         elif opcode in isa_type_lw_sw:
             curr = ''.join(curr.replace(',',' '))
             curr = ''.join(curr.replace('(',' '))
@@ -324,9 +330,67 @@ def parse_instruction(idx, instruction, instructions):
                 num = find_pcrel(idx, target, opcode, instructions)
                 pcrel = hex(num)[2:].zfill(4)
             else:
-                print 'how come it is not in the label'
+                print 'how come it is not in the label pcrel'
                 import ipdb; ipdb.set_trace()
         elif opcode == 'JAL':
+            # import ipdb; ipdb.set_trace()
+            curr = ''.join(curr.replace(',',' '))
+            curr = ''.join(curr.replace('(',' '))
+            curr = curr.replace(')','')
+            curr = curr.split()
+            rd = curr[0]
+            target = curr[1]
+            rs1 = curr[2]
+            if target in labels:
+                num = find_shImm(idx, target, opcode, instructions)
+                shImm = hex(num)[2:].zfill(4)
+            else:
+                shImm = hex(int(target))[2:].zfill(4)
+        elif opcode == 'NOT':
+            curr = curr.split(',')
+            opcode = 'NAND'
+            rd = curr[0]
+            rs1 = curr[1]
+            rs2 = rs1
+        else:
+            print 'Something went wrong here'
+            import ipdb; ipdb.set_trace()
+    elif opcode in isa_has_1_operands:
+        curr = ''.join([e for i, e in enumerate(curr) if i > 0])
+        curr = curr.split(',')
+        if opcode == 'BR':
+            imm16 = curr[0]
+        elif opcode == 'CALL':
+            opcode = 'JAL'
+            curr = ''.join(curr.replace(',',' '))
+            curr = ''.join(curr.replace('(',' '))
+            curr = curr.replace(')','')
+            curr = curr.split()
+            rd = 'RA'
+            target = curr[1]
+            rs1 = curr[2]
+            if target in labels:
+                num = find_shImm(idx, target, opcode, instructions)
+                shImm = hex(num)[2:].zfill(4)
+            else:
+                print 'how come it is not in the label, CALL'
+                import ipdb; ipdb.set_trace()
+        elif opcode == 'RET':
+            opcode = 'JAL'
+            curr = ''.join(curr.replace(',',' '))
+            curr = ''.join(curr.replace('(',' '))
+            curr = curr.replace(')','')
+            curr = curr.split()
+            rd = 'R9'
+            target = curr[1]
+            rs1 = 'RA'
+            if target in labels:
+                num = find_shImm(idx, target, opcode, instructions)
+                shImm = hex(num)[2:].zfill(4)
+            else:
+                print 'how come it is not in the label'
+                import ipdb; ipdb.set_trace()
+        elif opcode == 'JMP':
             curr = ''.join(curr.replace(',',' '))
             curr = ''.join(curr.replace('(',' '))
             curr = curr.replace(')','')
@@ -340,123 +404,109 @@ def parse_instruction(idx, instruction, instructions):
             else:
                 print 'how come it is not in the label'
                 import ipdb; ipdb.set_trace()
-            import ipdb; ipdb.set_trace()
-        elif opcode == 'NOT':
-            pass
-        else:
-            print 'Something went wrong here'
-            import ipdb; ipdb.set_trace()
-    elif opcode in isa_has_1_operands:
-        curr = ''.join([e for i, e in enumerate(curr) if i > 0])
-        curr = curr.split(',')
-        if opcode == 'BR':
-            imm16 = curr[0]
-        elif opcode == 'CALL':
-            pass
-        elif opcode == 'RET':
-            pass
-        elif opcode == 'JMP':
-            pass
         else:
             print 'current line has isa_has_1_operand, ant its not part of it'
             sys.exit(1)
-    binary = convert_instruction_to_binary(instruction, rd, rs1, rs2, imm16)
+    binary = convert_instruction_to_hex(opcode, rd, rs1, rs2, imm16, immHi, pcrel, shImm)
     return binary
 
-def get_imm16(target):
+def get_imm16(target, hi=False):
     ''' get the imm from target, regardless its a immdiate value or a variable'''
+    imm16 = None
     if target in names:
-        if names.get(target)[:2].upper() == '0X':
-            imm16 = names.get(target)[6:].zfill(4)
+        if hi:
+            if names.get(target)[:2].upper() == '0X':
+                imm16 = names.get(target)[:6][2:].zfill(4)
         else:
-            imm16 = hex(int(target)).zfill(4)
+            if names.get(target)[:2].upper() == '0X':
+                imm16 = names.get(target)[6:][2:].zfill(4)
+            else:
+                imm16 = hex(int(target))[2:].zfill(4)
     else:
         if '0X' in target.upper():       # if hex
-            imm16 = hex(target).zfill(4)
+            imm16 = hex(int(target[2:], 16))[2:].zfill(4)
         else:                            # if decimal
-            imm16 = hex(int(target)).zfill(4)
+            if target.isdigit():
+                imm16 = hex(int(target))[2:].zfill(4)
+            else:
+                imm16 = ''.zfill(4)
     return imm16
 
-def convert_instruction_to_binary(instruction, rd, rs1, rs2, imm):
+def convert_instruction_to_hex(opcode, rd, rs1, rs2, imm16, immHi, pcrel, shImm):
     ''' convert instruction into binary'''
-    binary = 0
-    inst_binary = opcodes.get(rd)
-    return binary
-
-def convert_instruction_to_correct_instruction(instruction, rd, rs1, rest):
-    ''' return a tuble of instruction binarys '''
-    first_instruction = 0
-    second_instruction= 0
-
-    if instruction.upper() in isa_type_implemented:
-        temp_instruction = isa_type_implemented.get(instruction)
-        if temp_instruction == 'BEQ':
-            pass
-        elif temp_instruction == 'ADDI':
-            pass
-        elif temp_instruction == 'NAND':
-            pass
-        elif temp_instruction == 'LT':
-            pass
-        elif temp_instruction == 'LE':
-            pass
-        elif temp_instruction == 'GT':
-            pass
-        elif temp_instruction == 'GE':
-            pass
-        # convert one instruction into two instructions
-        elif temp_instruction == 'JAL':
-            if instruction == 'CALL':
-                pass
-            elif instruction == 'RET':
-                pass
-            elif instruction == 'JMP':
-                pass
-    elif instruction.upper() in isa_type_12_zero:
-        # 12 bits
-        zeros = '000000000000'
-        r2 = rest
-        first_instruction = convert_instruction_to_binary(instruction, rd, rs1, r2, zeros)
-    elif instruction.upper() in isa_type_imm:
-        imm = None
-        first_instruction = convert_instruction_to_binary(instruction, rd, rs1, r2, imm)
-    elif instruction.upper() in isa_type_mvhi:
-        immHi = None
-        first_instruction = convert_instruction_to_binary(instruction, rd, '0000', None, immHi)
-    elif instruction.upper() in isa_type_jal:
-        # 16 bits
-        shImm = None
-        first_instruction = convert_instruction_to_binary(instruction, rd, rs1, None, shImm)
-    elif instruction.upper() in isa_type_pcrel:
-        # 16 bits
-        pcrel = None
-        first_instruction = convert_instruction_to_binary(instruction, None, rs1, rs2, imm)
+    hex_str = ''
+    print '==========='
+    print opcode, rd, rs1, rs2, imm16, immHi, pcrel, shImm
+    opcode_hex = hex(int(opcodes.get(opcode), 2))[2:].zfill(2)
+    if opcode in isa_type_12_zero:
+        rd_hex  = hex(int(registers.get(rd), 2))[2:].zfill(1)
+        rs1_hex = hex(int(registers.get(rs1), 2))[2:].zfill(1)
+        rs2_hex = hex(int(registers.get(rs2), 2))[2:].zfill(1)
+        hex_str = opcode_hex + rd_hex + rs1_hex + rs2_hex + '000'
+    elif opcode in isa_type_imm16:
+        rd_hex  = hex(int(registers.get(rd), 2))[2:].zfill(1)
+        rs1_hex = hex(int(registers.get(rs1), 2))[2:].zfill(1)
+        hex_str = opcode_hex + rd_hex + rs1_hex + imm16
+    elif opcode in isa_type_lw_sw:
+        rs1_hex = hex(int(registers.get(rs1), 2))[2:].zfill(1)
+        if opcode == 'LW':
+            rd_hex  = hex(int(registers.get(rd), 2))[2:].zfill(1)
+            hex_str = opcode_hex + rd_hex + rs1_hex + imm16
+        else:
+            rs2_hex = hex(int(registers.get(rs2), 2))[2:].zfill(1)
+            hex_str = opcode_hex + rs1_hex + rs2_hex + imm16
+    elif opcode in isa_type_mvhi:
+        rd_hex  = hex(int(registers.get(rd), 2))[2:].zfill(1)
+        hex_str = opcode_hex + rd_hex + '0' + immHi
+    elif opcode in isa_type_jal:
+        rd_hex  = hex(int(registers.get(rd), 2))[2:].zfill(1)
+        rs1_hex  = hex(int(registers.get(rs1), 2))[2:].zfill(1)
+        # calculate shImm based on offset
+        num = int(registers.get(rs1), 2) + int(shImm, 16)
+        shImm = hex(num)[2:].zfill(4)
+        hex_str = opcode_hex + rd_hex + rs1_hex + shImm
+    elif opcode in isa_type_pcrel:
+        rs1_hex  = hex(int(registers.get(rs1), 2))[2:].zfill(1)
+        if opcode in isa_has_2_operands:
+            hex_str = opcode_hex + rs1_hex + '0' + pcrel
+        else:
+            rs2_hex  = hex(int(registers.get(rs2), 2))[2:].zfill(1)
+            hex_str = opcode_hex + rs1_hex + rs2_hex + pcrel
+    elif opcode in isa_type_two_instructions:
+        # import ipdb; ipdb.set_trace()
+        print 'not supported'
     else:
-        print 'Instruction {} not found, exiting program'.format(instruction)
+        print 'how did you get this opcode: {} ?'.format(opcode)
         sys.exit(1)
-    return (first_instruction, second_instruction)
+    # print hex_str
+    # import ipdb; ipdb.set_trace()
+    return hex_str
 
 
 def write_file(output_file_name, instructions, instruction_line_number):
     with open (output_file_name, 'w') as f:
         write_header(f)
-        # buffer for binary traslations
-        instructions_binaries = deque()
         instructions_copy = copy.copy(instructions)
-        for lnumber in xrange(instruction_line_number):
-            write_instruction(f, instructions.popleft())
-            write_line_number(f, lnumber)
-            # write_binary(f, binstructions)
-            write_change_line(f)
+        # write clean insturctions to the end
+        for idx, instruction in enumerate(instructions_copy):
+            # f.write(instruction)
+            if not re.match(r'[a-zA-Z0-9]+:\s*', instruction):
+                write_instruction(f, instruction)
+                write_line_number(f, idx)
+                hex_str = parse_instruction(idx, instruction, instructions_copy)
+                f.write(hex_str)
+                # write_change_line(f)
+                write_change_line(f)
+
+        # for lnumber in xrange(instruction_line_number):
+        #     write_instruction(f, instructions.popleft())
+        #     write_line_number(f, lnumber)
+        #     write_change_line(f)
         write_footer(f)
         write_change_line(f)
-        for idx, instruction in enumerate(instructions_copy):
-            f.write(instruction)
-            binary = parse_instruction(idx, instruction, instructions_copy)
-            # write_change_line(f)
 
-def write_binary(file, content):
-    pass
+
+
 
 def write_instruction(file, content):
     file.write('-- @ ')
@@ -489,7 +539,7 @@ def find_pcrel(curr_idx, target, opcode, instructions):
     target_idx, pcrel = None, None
     for i, c in enumerate(instructions):
         if target == c.strip()[:-1]:
-            target_idx = i
+            target_idx = i - 1
     return target_idx
 
 def find_shImm(curr_idx, target, opcode, instructions):
