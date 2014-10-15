@@ -26,7 +26,7 @@ AtZero:
 	addi	t0,s0,0xBAD
 	sw		t0,OFSHEX(gp)
 	bt		t0,t0,AtZero
-	
+
 	; Now the actual code
 	.ORIG 0x40
 	addi	s2,s0,0x0BEF
@@ -52,7 +52,7 @@ AddFailed:
 	not		t0,fp
 	sw		t0,OFSLEDR(gp)
 	sw		a0,OFSHEX(gp)
-	bt		t0,t0,AddFailed	
+	bt		t0,t0,AddFailed
 AddWorks:
 	; Put 3 on LEDG, LEDR should still be off
 	addi	s0,s0,1
@@ -79,7 +79,7 @@ AluFailed:
 	not		t0,fp
 	sw		t0,OFSLEDR(gp)
 	sw		a0,OFSHEX(gp)
-	bt		t0,t0,AluFailed	
+	bt		t0,t0,AluFailed
 AluWorks:
 	; Put 4 on LEDG, LEDR should still be off
 	addi	s0,s0,1
@@ -114,7 +114,7 @@ AluWorks:
 	addi	s0,s0,1
 	sw		s0,OFSLEDG(gp)
 	gte		a2,t0,t1
-	bne		a2,a1,CmpFailed	
+	bne		a2,a1,CmpFailed
 	; Put 10 on LEDG
 	addi	s0,s0,1
 	sw		s0,OFSLEDG(gp)
@@ -144,7 +144,7 @@ AluWorks:
 	addi	s0,s0,1
 	sw		s0,OFSLEDG(gp)
 	gte		a2,t1,t1
-	bne		a2,a1,CmpFailed	
+	bne		a2,a1,CmpFailed
 	; Put 16 on LEDG
 	addi	s0,s0,1
 	sw		s0,OFSLEDG(gp)
@@ -174,7 +174,7 @@ AluWorks:
 	addi	s0,s0,1
 	sw		s0,OFSLEDG(gp)
 	gte		a2,a0,t0
-	bne		a2,fp,CmpFailed	
+	bne		a2,fp,CmpFailed
 	bt		t0,t0,CmpWorks
 CmpFailed:
 	; Turn on LEDR, display what's in a2

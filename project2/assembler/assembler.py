@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-import os.path, sys, re
-
+import os.path, sys, re, copy
+from collections import deque
 
 header = {
         'width': 32,
@@ -11,41 +11,43 @@ header = {
 
 # 32 registers from r0 to r31
 registers = {
-        'zero' :      '00000', # r0'
-        'at'   :      '00001', # r1'
-        'v0'   :      '00010', # r2'
-        'v1'   :      '00011', # r3'
-        'a0'   :      '00100', # r4'
-        'a1'   :      '00101', # r5'
-        'a2'   :      '00110', # r6'
-        'a3'   :      '00111', # r7'
-        't0'   :      '01000', # r8'
-        't1'   :      '01001', # r9'
-        't2'   :      '01010', # r10
-        't3'   :      '01011', # r11
-        't4'   :      '01100', # r12
-        't5'   :      '01101', # r13
-        't6'   :      '01110', # r14
-        't7'   :      '01111', # r15
-        's0'   :      '10000', # r16
-        's1'   :      '10001', # r17
-        's2'   :      '10010', # r18
-        's3'   :      '10011', # r19
-        's4'   :      '10100', # r20
-        's5'   :      '10101', # r21
-        's6'   :      '10110', # r22
-        's7'   :      '10111', # r23
-        't8'   :      '11000', # r24
-        't9'   :      '11001', # r25
-        'k0'   :      '11010', # r26
-        'k1'   :      '11011', # r27
-        'gp'   :      '11100', # r28
-        'sp'   :      '11101', # r29
-        'fp'   :      '11110', # r30
-        'ra'   :      '11111'  # r31
+        'A0'    :      '00000',     # r0 -> func arg
+        'A1'    :      '00001',     # r1 -> func arg
+        'A2'    :      '00010',     # r2 -> func arg
+        'A3'    :      '00011',     # r3 -> caller saved
+        'RV'    :      '00011',     # r3 -> return value, caller saved
+        'T0'    :      '00100',     # r4 -> temp, caller saved
+        'T1'    :      '00101',     # r5 -> temp, caller saved
+        'S0'    :      '00110',     # r6 -> callee saved value
+        'S1'    :      '00111',     # r7 -> callee saved value
+        'S2'    :      '01000',     # r8 -> callee saved value
+        'R9'    :      '01001',     # r9 -> reserved for assembler use
+        'R10'   :      '01010',     # r10-> reserved for system use
+        'R11'   :      '01011',     # r11-> reserved for system use
+        'GP'    :      '01100',     # r12-> global pointer
+        'FP'    :      '01101',     # r13-> frame pointer
+        'SP'    :      '01110',     # r14-> stack pointer
+        'RA'    :      '01111',     # r15-> return address
+        'R16'   :      '10000',     # r16
+        'R17'   :      '10001',     # r17
+        'R18'   :      '10010',     # r18
+        'R19'   :      '10011',     # r19
+        'R20'   :      '10100',     # r20
+        'R21'   :      '10101',     # r21
+        'R22'   :      '10110',     # r22
+        'R23'   :      '10111',     # r23
+        'R24'   :      '11000',     # r24
+        'R25'   :      '11001',     # r25
+        'R26'   :      '11010',     # r26
+        'R27'   :      '11011',     # r27
+        'R28'   :      '11100',     # r28
+        'R29'   :      '11101',     # r29
+        'R30'   :      '11110',     # r30
+        'R31'   :      '11111'      # r31
         }
 
 # Instruction Set Architecture from project-isa.pdf file in binaries
+# each opcode has 8 bits
 opcodes = {
         'ADD':      '00000000',
         'SUB':      '00000001',
@@ -54,7 +56,7 @@ opcodes = {
         'XOR':      '00000110',
         'NAND':     '00001100',
         'NOR':      '00001101',
-        'XNOR':     '00001110',
+        'NXOR':     '00001110',
 
         'ADDI':     '10000000',
         'SUBI':     '10000001',
@@ -63,7 +65,7 @@ opcodes = {
         'XORI':     '10000110',
         'NANDI':    '10001100',
         'NORI':     '10001101',
-        'XNORI':    '10001110',
+        'NXORI':    '10001110',
         'MVHI':     '10001011',
 
         'SW':       '10010000',
@@ -105,7 +107,8 @@ opcodes = {
 
         'JAL':      '10110000',
 
-        # N is implemented using BEQ
+        # Pseudo-instructions
+        # B is implemented using BEQ
         'BR': '',
 
         # NOT is implemented using NAND
@@ -121,24 +124,30 @@ opcodes = {
         'JMP': '',
         }
 
-
-instruction_line_number = 0
 names = {}
 origs = []
+words = {}
+labels = set()
 
 # look up instruciton type
 isa_type_12_zero = set([
-                'ADD', 'SUB', 'AND', 'OR', 'XOR', 'NAND', 'NOR', 'XNOR',
+                'ADD', 'SUB', 'AND', 'OR', 'XOR', 'NAND', 'NOR', 'NXOR',
                 'F', 'EQ', 'LT', 'LTE', 'T', 'NE', 'GTE', 'GT'])
-isa_type_imm = set([
-    'ADDI', 'SUBI', 'ANDI', 'ORI', 'XORI', 'NANDI', 'NORI', 'XNORI',
-    'LW', 'SW',
+
+isa_type_imm16 = set([
+    'ADDI', 'SUBI', 'ANDI', 'ORI', 'XORI', 'NANDI', 'NORI', 'NXORI',
     'FI', 'EQI', 'LTI', 'LTEI', 'TI', 'NEI', 'GTEI', 'GTI'])
+
+isa_type_lw_sw = set(['LW', 'SW'])
+
 isa_type_mvhi = set(['MVHI'])
 isa_type_jal = set(['JAL'])
 isa_type_pcrel = set([
-    'BF', 'BEQ', 'BLT', 'BLTE', 'BEQZ', 'BLTZ', 'BLTEZ'
+    'BF', 'BEQ', 'BLT', 'BLTE', 'BEQZ', 'BLTZ', 'BLTEZ',
+    'BT', 'BNE', 'BGTE', 'BGT', 'BNEZ', 'BGTEZ', 'BGTZ'
     ])
+isa_type_two_instructions = set(['BLT', 'BLE', 'BGT', 'BGE'])
+
 isa_type_implemented = {
         'BR':   'BEQ',
         'SUBI': 'ADDI',
@@ -152,14 +161,39 @@ isa_type_implemented = {
         'JMP':  'JAL'
         }
 
+isa_has_3_operands = set([
+     'ADD', 'SUB', 'AND', 'OR', 'XOR', 'NAND', 'NOR', 'NXOR',
+     'ADDI', 'ANDI', 'ORI', 'XORI', 'NANDI', 'NORI', 'NXORI',
+     'F', 'EQ', 'LT', 'LTE', 'T', 'NE', 'GTE', 'GT',
+     'FI', 'EQI', 'LTI', 'LTEI', 'TI', 'NEI', 'GTEI', 'GTI',
+     'SUBI',
+     'BF', 'BEQ', 'BLT', 'BLTE',
+     'BT', 'BNE', 'BGTE', 'BGT',
+     'BLT', 'BLE', 'BGT', 'BGE'
+    ])
+
+isa_has_2_operands = set([
+     'MVHI',
+     'LW', 'SW',
+     'BEQZ', 'BLTZ', 'BLTEZ',
+     'BNEZ', 'BGTEZ', 'BGTZ',
+     'JAL',
+     'NOT',
+     ])
+
+isa_has_1_operands = set(['BR', 'CALL', 'RET', 'JMP'])
+
 def main():
     fname = 'Test.a32'
+    # fname = 'Sort.a32'
     # fname = raw_input('Enter the file name: ')
     if check_file(fname):
         file_suffix = '.mif'
         output_file_name = ''.join([fname[:-4], file_suffix])
-        read_file(fname)
-        write_file(output_file_name)
+        # buffer for instruction
+        instructions = deque()
+        instruction_line_number = read_file(fname, instructions)
+        write_file(output_file_name, instructions, instruction_line_number)
 
 def check_file(fname):
     if os.path.isfile(fname):
@@ -172,48 +206,166 @@ def check_file(fname):
     return False
 
 
-def read_file(fname):
+def read_file(fname, instructions):
     print 'Reading file: {}'.format(fname)
     with open (fname, 'r') as f:
         file_line_number = 1
+        file_mem_numbber = 1
         total_instructions = 0
         for line in f.xreadlines():
             print file_line_number,
+            line = line.upper()
             if re.match(r'^\s*$', line):
                 # print 'Line is empty'
                 pass
-            if re.match(r'^\s*;', line):
-                # print 'Line is a comment'
-                pass
-            if re.match(r'\s*.ORIG', line):
+            elif re.match(r'^\s*;', line):
+                print 'Line is a comment'
+            elif re.match(r'\s*.ORIG', line):
                 print 'Line has orig'
                 curr = line.split()
                 origs.append(curr[1])
-            if re.match(r'\s([a-zA-Z]+)', line):
+            elif re.match(r'\s([a-zA-Z]+)', line):
                 print 'Line has instruction'
-                curr = line.split()
-                instruction = curr[0]
-                curr = ''.join([e for i, e in enumerate(line.split()) if i > 0])
-                curr = curr.split(',')
-                rd = curr[0]
-                rs1 = curr[1]
-                rs2 = curr[2]
-                import ipdb; ipdb.set_trace()
-                total_instructions += 1
-            if re.match(r'[a-zA-Z0-9]+:', line):
+                # remove comments
+                line = re.sub(r'\w*;.*$', '', line)
+                curr = line.strip().split()
+                opcode = curr[0].upper()
+                if opcode not in isa_has_3_operands \
+                    and opcode not in isa_has_2_operands \
+                    and opcode not in isa_has_1_operands:
+                    print line
+                    print 'Current instruction has neither 1,2,3 operands at \
+                            line {}'.format(file_line_number)
+                    sys.exit(1)
+                if opcode in isa_type_two_instructions:
+                    # TODO
+                    instr = line.split(',')
+                    # import ipdb; ipdb.set_trace()
+                    instructions.append(line)
+                    instructions.append(line)
+                    total_instructions += 2
+                else:
+                    instructions.append(line)
+                    total_instructions += 1
+            elif re.match(r'[a-zA-Z0-9]+:\s*', line):
                 print 'Line has section label'
-                pass
-            if re.match(r'\s*.NAME', line):
+                instructions.append(line)
+                label = line.strip()[:-1]
+                # import ipdb; ipdb.set_trace()
+                labels.add(label)
+            elif re.match(r'\s*.NAME', line):
                 print 'Line has NAME variables'
                 curr = ''.join([e for i, e in enumerate(line.split()) if i > 0])
                 curr = curr.split('=')
                 names[curr[0]] = curr[1]
-                pass
+            else:
+                print 'Something went wrong, this line is not a valid line'
+                import ipdb; ipdb.set_trace()
             file_line_number += 1
-    print names
-    print origs
-    import ipdb; ipdb.set_trace()
+            file_mem_numbber += 4
+    print 'names: \n {}'.format(names)
+    print 'origs: \n {}'.format(origs)
+    print 'labels: \n {}'.format(labels)
+    print 'total_instructions: \n {}'.format(total_instructions)
+    return total_instructions
 
+def parse_instruction(idx, instruction, instructions):
+    rd, rs1, rs2, imm12, imm16, immHi, pcrel  = None, None, None, None, None, None, None
+    curr = instruction.strip().split()
+    opcode = curr[0].upper()
+    if opcode in isa_has_3_operands:
+        curr = ''.join([e for i, e in enumerate(curr) if i > 0])
+        curr = curr.split(',')
+        if opcode in isa_type_12_zero:
+            imm12 = '000000000000'
+            rd = curr[0]
+            rs1 = curr[1]
+            rs2 = curr[2]
+        elif opcode in isa_type_imm16:
+            rd = curr[0]
+            rs1 = curr[1]
+            imm16 = curr[2]
+        elif opcode in isa_type_pcrel:
+            rs1 = curr[0]
+            rs2 = curr[1]
+            target = curr[2]
+            import ipdb; ipdb.set_trace()
+            if target in labels:
+                pcrel = find_pcrel(idx, target, opcode, instructions)
+                print 'Pcrel: ' + pcrel
+            else:
+                # pcrel = '0' + names.get(curr[1])[6:] or curr[1][2:]
+                # import ipdb; ipdb.set_trace()
+                pass
+    elif opcode in isa_has_2_operands:
+        curr = ''.join([e for i, e in enumerate(curr) if i > 0])
+        # import ipdb; ipdb.set_trace()
+        if opcode in isa_type_mvhi:
+            curr = curr.split(',')
+            rd = curr[0]
+            imm16 = get_imm16(curr[1])
+            immHi = '0' + imm16
+        elif opcode in isa_type_lw_sw:
+            curr = ''.join(curr.replace(',',' '))
+            curr = ''.join(curr.replace('(',' '))
+            curr = curr.replace(')','')
+            curr = curr.split()
+            if opcode == 'LW':
+                rd = curr[0]
+                imm16 = get_imm16(curr[1])
+                rs1 = curr[2]
+            else:
+                rs2 = curr[0]
+                imm16 = get_imm16(curr[1])
+                rs1 = curr[2]
+        elif opcode in isa_type_pcrel:
+            rs1 = curr[0]
+            target = curr[1]
+            if target in names:
+                a = find_pcrel(idx, target, opcode, instructions)
+            # pcrel = '0' + names.get(curr[1])[6:] or curr[1][2:]
+                # import ipdb; ipdb.set_trace()
+            # import ipdb; ipdb.set_trace()
+        elif opcode == 'JAL':
+            pass
+            # import ipdb; ipdb.set_trace()
+        elif opcode == 'NOT':
+            pass
+            # import ipdb; ipdb.set_trace()
+        else:
+            print 'Something went wrong here'
+            import ipdb; ipdb.set_trace()
+        # rd = curr[0]
+        # rs1 = curr[1]
+        # if opecode in
+        # elif opcode in :
+    elif opcode in isa_has_1_operands:
+        curr = ''.join([e for i, e in enumerate(curr) if i > 0])
+        curr = curr.split(',')
+        if opcode == 'BR':
+            imm16 = curr[0]
+        elif opcode == 'CALL':
+            pass
+        elif opcode == 'RET':
+            pass
+        elif opcode == 'JMP':
+            pass
+        else:
+            print 'current line has isa_has_1_operand, ant its not part of it'
+            sys.exit(1)
+    binary = convert_instruction_to_binary(instruction, rd, rs1, rs2, imm16)
+    return binary
+
+def get_imm16(target):
+    ''' get the imm from target, regardless its a immdiate value or a variable'''
+    if target in names:
+        if names.get(target)[:2].upper() == '0X':
+            imm16 = names.get(target)[6:]
+        else:
+            imm16 = names.get(target)
+    else:
+        imm16 = target
+    return imm16
 
 def convert_instruction_to_binary(instruction, rd, rs1, rs2, imm):
     ''' convert instruction into binary'''
@@ -274,22 +426,35 @@ def convert_instruction_to_correct_instruction(instruction, rd, rs1, rest):
         sys.exit(1)
     return (first_instruction, second_instruction)
 
-def parse_file(fname):
-    pass
 
-
-def write_file(output_file_name):
+def write_file(output_file_name, instructions, instruction_line_number):
     with open (output_file_name, 'w') as f:
         write_header(f)
-        write_contents(f, instruction_line_number)
+        # buffer for binary traslations
+        instructions_binaries = deque()
+        instructions_copy = copy.copy(instructions)
+        for lnumber in xrange(instruction_line_number):
+            write_instruction(f, instructions.popleft())
+            write_line_number(f, lnumber)
+            # write_binary(f, binstructions)
+            write_change_line(f)
         write_footer(f)
+        write_change_line(f)
+        for idx, instruction in enumerate(instructions_copy):
+            f.write(instruction)
+            binary = parse_instruction(idx, instruction, instructions_copy)
+            # write_change_line(f)
 
-def write_contents(file, line_number):
-    file.write('\n')
-    for i in xrange(10):
-        write_line_number(file, line_number)
-        line_number = line_number + 1
-        file.write('\n')
+def write_binary(file, content):
+    pass
+
+def write_instruction(file, content):
+    file.write('-- @ ')
+    file.write(content)
+
+
+def write_line_number(file, line_number):
+    write_line_number(file, line_number)
 
 
 def write_header(file):
@@ -308,6 +473,23 @@ def write_header(file):
     file.write('CONTENT BEGIN')
     write_change_line(file)
 
+
+def write_fill_dead(file, start, end):
+    content = '[{}.clear.{}] : DEAD;'.format(start, end)
+    file.write(content)
+
+def find_pcrel(curr_idx, target, opcode, instructions):
+    ''' calculate the index difference between curr and target '''
+    target_idx, pcrel = None, None
+    for i, c in enumerate(instructions):
+        if target == c.strip()[:-1]:
+            target_idx = i
+    if opcode in isa_type_two_instructions:
+        pcrel = target_idx - curr_idx
+    else:
+        pcrel = target_idx - curr_idx - 1
+    import ipdb; ipdb.set_trace()
+    return pcrel
 
 def write_footer(file):
     file.write('END;')
