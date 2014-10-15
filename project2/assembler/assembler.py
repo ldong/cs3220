@@ -186,7 +186,7 @@ isa_has_1_operands = set(['BR', 'CALL', 'RET', 'JMP'])
 def main():
     fname = 'Test.a32'
     # fname = 'Sort.a32'
-    # fname = raw_input('Enter the file name: ')
+    fname = raw_input('Enter the file name: ') or 'Test.a32'
     if check_file(fname):
         file_suffix = '.mif'
         output_file_name = ''.join([fname[:-4], file_suffix])
@@ -194,6 +194,7 @@ def main():
         instructions = deque()
         instruction_line_number = read_file(fname, instructions)
         write_file(output_file_name, instructions, instruction_line_number)
+        print 'file {} is populated'.format(output_file_name)
 
 def check_file(fname):
     if os.path.isfile(fname):
@@ -213,7 +214,7 @@ def read_file(fname, instructions):
         file_mem_numbber = 1
         total_instructions = 0
         for line in f.xreadlines():
-            print file_line_number,
+            # print file_line_number,
             line = line.upper()
             if re.match(r'^\s*$', line):
                 # print 'Line is empty'
@@ -264,10 +265,10 @@ def read_file(fname, instructions):
                 import ipdb; ipdb.set_trace()
             file_line_number += 1
             file_mem_numbber += 4
-    print '\nnames: \n {}'.format(names)
-    print 'origs: \n {}'.format(origs)
-    print 'labels: \n {}'.format(labels)
-    print 'total_instructions:  {}'.format(total_instructions)
+    # print '\nnames: \n {}'.format(names)
+    # print 'origs: \n {}'.format(origs)
+    # print 'labels: \n {}'.format(labels)
+    # print 'total_instructions:  {}'.format(total_instructions)
     return total_instructions
 
 def parse_instruction(idx, instruction, instructions):
@@ -435,8 +436,8 @@ def get_imm16(target, hi=False):
 def convert_instruction_to_hex(opcode, rd, rs1, rs2, imm16, immHi, pcrel, shImm):
     ''' convert instruction into binary'''
     hex_str = ''
-    print '==========='
-    print opcode, rd, rs1, rs2, imm16, immHi, pcrel, shImm
+    # print '==========='
+    # print opcode, rd, rs1, rs2, imm16, immHi, pcrel, shImm
     opcode_hex = hex(int(opcodes.get(opcode), 2))[2:].zfill(2)
     if opcode in isa_type_12_zero:
         rd_hex  = hex(int(registers.get(rd), 2))[2:].zfill(1)
@@ -488,15 +489,17 @@ def write_file(output_file_name, instructions, instruction_line_number):
         write_header(f)
         instructions_copy = copy.copy(instructions)
         # write clean insturctions to the end
+        line_number = 0
         for idx, instruction in enumerate(instructions_copy):
             # f.write(instruction)
             if not re.match(r'[a-zA-Z0-9]+:\s*', instruction):
-                write_instruction(f, instruction)
+                write_instruction(f, line_number, instruction)
                 write_line_number(f, idx)
                 hex_str = parse_instruction(idx, instruction, instructions_copy)
                 f.write(hex_str)
                 # write_change_line(f)
                 write_change_line(f)
+                line_number += 4
 
         # for lnumber in xrange(instruction_line_number):
         #     write_instruction(f, instructions.popleft())
@@ -508,8 +511,8 @@ def write_file(output_file_name, instructions, instruction_line_number):
 
 
 
-def write_instruction(file, content):
-    file.write('-- @ ')
+def write_instruction(file, line_number, content):
+    file.write('-- @ 0x{}'.format(hex(line_number)[2:].zfill(8)))
     file.write(content)
 
 
