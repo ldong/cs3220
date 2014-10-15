@@ -186,7 +186,7 @@ isa_has_1_operands = set(['BR', 'CALL', 'RET', 'JMP'])
 def main():
     fname = 'Test.a32'
     # fname = 'Sort.a32'
-    fname = raw_input('Enter the file name: ') or 'Test.a32'
+    fname = raw_input('Enter the file name: ')
     if check_file(fname):
         file_suffix = '.mif'
         output_file_name = ''.join([fname[:-4], file_suffix])
@@ -240,11 +240,33 @@ def read_file(fname, instructions):
                             line {}'.format(file_line_number)
                     sys.exit(1)
                 if opcode in isa_type_two_instructions:
-                    # TODO
                     instr = line.split(',')
-                    # import ipdb; ipdb.set_trace()
-                    instructions.append(line)
-                    instructions.append(line)
+                    rs1 = instr[0].split()[0]
+                    rs2 = instr[0].split()[1]
+                    imm = instr[1]
+                    line1, line2, opcode1, opcode2 = None, None, None, None
+                    if opcode == 'BLT':
+                        opcode1 = 'LT'
+                        opcode2 = 'BNE'
+                        line1 = opcode1 + ' R6 ' + rs1 + ' ' + rs2
+                        line2 = opcode2 + ' R6 ' + ' A0 ' + imm
+                    elif opcode == 'BLE':
+                        opcode1 = 'LE'
+                        opcode2 = 'BNE'
+                        line1 = opcode1 + ' R6 ' + rs1 + ' ' + rs2
+                        line2 = opcode2 + ' R6 ' + ' A0 ' + imm
+                    elif opcode == 'BGT':
+                        opcode1 = 'GT'
+                        opcode2 = 'BNE'
+                        line1 = opcode1 + ' R6 ' + rs1 + ' ' + rs2
+                        line2 = opcode2 + ' R6 ' + ' A0 ' + imm
+                    elif opcode == 'BGE':
+                        opcode1 = 'GE'
+                        opcode2 = 'BNE'
+                        line1 = opcode1 + ' R6 ' + rs1 + ' ' + rs2
+                        line2 = opcode2 + ' R6 ' + ' A0 ' + imm
+                    instructions.append(line1)
+                    instructions.append(line2)
                     total_instructions += 2
                 else:
                     instructions.append(line)
@@ -474,8 +496,8 @@ def convert_instruction_to_hex(opcode, rd, rs1, rs2, imm16, immHi, pcrel, shImm)
             rs2_hex  = hex(int(registers.get(rs2), 2))[2:].zfill(1)
             hex_str = opcode_hex + rs1_hex + rs2_hex + pcrel
     elif opcode in isa_type_two_instructions:
+        print 'You should not see it here, since its has been translated into two isa'
         # import ipdb; ipdb.set_trace()
-        print 'not supported'
     else:
         print 'how did you get this opcode: {} ?'.format(opcode)
         sys.exit(1)
