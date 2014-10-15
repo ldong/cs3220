@@ -270,7 +270,8 @@ def read_file(fname, instructions):
     return total_instructions
 
 def parse_instruction(idx, instruction, instructions):
-    rd, rs1, rs2, imm12, imm16, immHi, pcrel  = None, None, None, None, None, None, None
+    rd, rs1, rs2, imm12 = None, None, None, None
+    imm16, immHi, pcrel, shImm = None, None, None, None
     curr = instruction.strip().split()
     opcode = curr[0].upper()
     if opcode in isa_has_3_operands:
@@ -284,19 +285,17 @@ def parse_instruction(idx, instruction, instructions):
         elif opcode in isa_type_imm16:
             rd = curr[0]
             rs1 = curr[1]
-            imm16 = curr[2]
+
         elif opcode in isa_type_pcrel:
             rs1 = curr[0]
             rs2 = curr[1]
             target = curr[2]
-            import ipdb; ipdb.set_trace()
             if target in labels:
-                pcrel = find_pcrel(idx, target, opcode, instructions)
-                print 'Pcrel: ' + pcrel
+                num = find_pcrel(idx, target, opcode, instructions)
+                pcrel = hex(num)[2:].zfill(4)
             else:
-                # pcrel = '0' + names.get(curr[1])[6:] or curr[1][2:]
-                # import ipdb; ipdb.set_trace()
-                pass
+                pcrel = hex(target)[2:].zfill(4)
+                import ipdb; ipdb.set_trace()
     elif opcode in isa_has_2_operands:
         curr = ''.join([e for i, e in enumerate(curr) if i > 0])
         # import ipdb; ipdb.set_trace()
@@ -321,24 +320,32 @@ def parse_instruction(idx, instruction, instructions):
         elif opcode in isa_type_pcrel:
             rs1 = curr[0]
             target = curr[1]
-            if target in names:
-                a = find_pcrel(idx, target, opcode, instructions)
-            # pcrel = '0' + names.get(curr[1])[6:] or curr[1][2:]
-                # import ipdb; ipdb.set_trace()
-            # import ipdb; ipdb.set_trace()
+            if target in labels:
+                num = find_pcrel(idx, target, opcode, instructions)
+                pcrel = hex(num)[2:].zfill(4)
+            else:
+                print 'how come it is not in the label'
+                import ipdb; ipdb.set_trace()
         elif opcode == 'JAL':
-            pass
-            # import ipdb; ipdb.set_trace()
+            curr = ''.join(curr.replace(',',' '))
+            curr = ''.join(curr.replace('(',' '))
+            curr = curr.replace(')','')
+            curr = curr.split()
+            rd = curr[0]
+            target = curr[1]
+            rs1 = curr[2]
+            if target in labels:
+                num = find_shImm(idx, target, opcode, instructions)
+                shImm = hex(num)[2:].zfill(4)
+            else:
+                print 'how come it is not in the label'
+                import ipdb; ipdb.set_trace()
+            import ipdb; ipdb.set_trace()
         elif opcode == 'NOT':
             pass
-            # import ipdb; ipdb.set_trace()
         else:
             print 'Something went wrong here'
             import ipdb; ipdb.set_trace()
-        # rd = curr[0]
-        # rs1 = curr[1]
-        # if opecode in
-        # elif opcode in :
     elif opcode in isa_has_1_operands:
         curr = ''.join([e for i, e in enumerate(curr) if i > 0])
         curr = curr.split(',')
@@ -360,11 +367,14 @@ def get_imm16(target):
     ''' get the imm from target, regardless its a immdiate value or a variable'''
     if target in names:
         if names.get(target)[:2].upper() == '0X':
-            imm16 = names.get(target)[6:]
+            imm16 = names.get(target)[6:].zfill(4)
         else:
-            imm16 = names.get(target)
+            imm16 = hex(int(target)).zfill(4)
     else:
-        imm16 = target
+        if '0X' in target.upper():       # if hex
+            imm16 = hex(target).zfill(4)
+        else:                            # if decimal
+            imm16 = hex(int(target)).zfill(4)
     return imm16
 
 def convert_instruction_to_binary(instruction, rd, rs1, rs2, imm):
@@ -453,10 +463,6 @@ def write_instruction(file, content):
     file.write(content)
 
 
-def write_line_number(file, line_number):
-    write_line_number(file, line_number)
-
-
 def write_header(file):
     file.write('WIDTH={};'.format(header.get('width')))
     write_change_line(file)
@@ -479,17 +485,24 @@ def write_fill_dead(file, start, end):
     file.write(content)
 
 def find_pcrel(curr_idx, target, opcode, instructions):
+    ''' return the target idx of the instruction'''
+    target_idx, pcrel = None, None
+    for i, c in enumerate(instructions):
+        if target == c.strip()[:-1]:
+            target_idx = i
+    return target_idx
+
+def find_shImm(curr_idx, target, opcode, instructions):
     ''' calculate the index difference between curr and target '''
     target_idx, pcrel = None, None
     for i, c in enumerate(instructions):
         if target == c.strip()[:-1]:
             target_idx = i
     if opcode in isa_type_two_instructions:
-        pcrel = target_idx - curr_idx
+        shImm = target_idx - curr_idx
     else:
-        pcrel = target_idx - curr_idx - 1
-    import ipdb; ipdb.set_trace()
-    return pcrel
+        shImm = target_idx - curr_idx - 1
+    return shImm
 
 def write_footer(file):
     file.write('END;')
